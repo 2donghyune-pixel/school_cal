@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 급식 칼로리 도우미</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              900: '#14532d',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(34, 197, 94, 0.2); }
+      50% { box-shadow: 0 0 30px rgba(34, 197, 94, 0.5); }
+    }
+    .pulse-glow { animation: pulseGlow 2s infinite; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col items-center justify-start pb-12">
+
+  <header class="w-full bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <span class="text-2xl">🍱</span>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">AI 급식 칼로리 도우미</h1>
+          <p class="text-xs text-slate-500">사진 한 장으로 확인하는 맞춤 영양 리포트</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+          <span class="w-2 h-2 mr-1.5 bg-emerald-500 rounded-full animate-ping"></span>
+          Gemini AI
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="w-full max-w-2xl px-4 pt-6 space-y-6">
+
+    <!-- Toast Notification Container -->
+    <div id="toast" class="hidden fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs sm:text-sm font-medium py-2.5 px-4 rounded-full shadow-lg transition-all duration-300 flex items-center space-x-2">
+      <span id="toastIcon">ℹ️</span>
+      <span id="toastMessage">알림 내용</span>
+    </div>
+
+    <!-- Upload Card -->
+    <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 transition-all">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-bold text-slate-800 flex items-center">
+          <svg class="w-5 h-5 mr-1.5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h0.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+          급식 사진 업로드 / 촬영
+        </h2>
+        <button onclick="loadSampleImage()" class="text-xs text-brand-600 hover:text-brand-700 font-medium underline underline-offset-2">
+          예시 급식 사진 테스트
+        </button>
+      </div>
+
+      <!-- Drag & Drop Zone -->
+      <div id="dropZone" onclick="document.getElementById('imageInput').click()" 
+        class="border-2 border-dashed border-slate-300 hover:border-brand-500 bg-slate-50 hover:bg-emerald-50/40 rounded-xl p-6 text-center transition cursor-pointer relative group">
+        
+        <input type="file" id="imageInput" accept="image/*" capture="environment" class="hidden" onchange="handleFileSelect(event)">
+
+        <!-- Placeholder UI -->
+        <div id="uploadPlaceholder" class="space-y-3 py-4">
+          <div class="w-14 h-14 mx-auto rounded-full bg-emerald-100 text-brand-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-slate-700">급식 식판 사진을 찍거나 클릭하여 선택</p>
+            <p class="text-xs text-slate-400 mt-1">카메라 촬영, 드래그 & 드롭, 파일 첨부 모두 가능</p>
+          </div>
+        </div>
+
+        <!-- Preview UI -->
+        <div id="previewContainer" class="hidden relative">
+          <img id="imagePreview" src="" alt="식단 미리보기" class="max-h-72 w-full object-cover rounded-lg shadow-inner">
+          <button onclick="event.stopPropagation(); resetImageSelection();" 
+            class="absolute top-2 right-2 bg-slate-900/70 hover:bg-slate-900 text-white rounded-full p-1.5 shadow backdrop-blur transition" title="사진 제거">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button id="analyzeBtn" onclick="analyzeLunchImage()" disabled
+        class="mt-4 w-full bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center space-x-2 text-sm sm:text-base">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        <span>AI 영양 성분 분석하기</span>
+      </button>
+    </section>
+
+    <section id="loadingState" class="hidden bg-white rounded-2xl p-8 text-center shadow-sm border border-slate-200 space-y-4">
+      <div class="relative w-16 h-16 mx-auto">
+        <div class="absolute inset-0 rounded-full border-4 border-brand-100"></div>
+        <div class="absolute inset-0 rounded-full border-4 border-brand-600 border-t-transparent animate-spin"></div>
+        <div class="absolute inset-0 flex items-center justify-center text-xl">🍱</div>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-slate-800" id="loadingStatusText">AI가 급식 메뉴를 정밀 스캔 중입니다...</h3>
+        <p class="text-xs text-slate-500 mt-1">Gemini 3.1 Flash 모델이 각 음식의 카테고리, 분량, 영양소를 계산하고 있습니다.</p>
+      </div>
+      <!-- Animated status bar -->
+      <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+        <div class="bg-brand-500 h-full animate-pulse w-3/4 rounded-full"></div>
+      </div>
+    </section>
+
+    <section id="resultSection" class="hidden space-y-6">
+
+      <!-- Result Header Card -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-2">
+          <div>
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200 mb-1">
+              분석 완료
+            </span>
+            <h2 id="resMealName" class="text-xl font-extrabold text-slate-900">식단 이름</h2>
+            <p id="resTimestamp" class="text-xs text-slate-400 mt-0.5">2026. 07. 28 12:30 분석됨</p>
+          </div>
+          <!-- Nutrition Score Badge -->
+          <div class="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-100 self-start sm:self-auto">
+            <div class="text-right">
+              <div class="text-xs text-slate-500 font-medium">영양 균형 점수</div>
+              <div class="text-xs text-slate-400">100점 만점 기준</div>
+            </div>
+            <div id="resScoreBadge" class="w-12 h-12 rounded-full bg-brand-600 text-white font-extrabold text-lg flex items-center justify-center shadow">
+              88
+            </div>
+          </div>
+        </div>
+
+        <!-- Total Calories Hero -->
+        <div class="mt-5 bg-gradient-to-br from-emerald-50 to-teal-50/50 border border-emerald-200/60 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <span class="text-xs font-bold text-emerald-800 uppercase tracking-wider">추정 총 칼로리</span>
+            <div class="flex items-baseline space-x-1.5 mt-0.5">
+              <span id="resTotalCalories" class="text-3xl font-black text-brand-700">685</span>
+              <span class="text-sm font-bold text-emerald-900">kcal</span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">권장 점심 칼로리(약 700~800 kcal) 대비 <span id="resCalorieDiff" class="font-bold text-slate-700">적정 수준</span>입니다.</p>
+          </div>
+          <div class="text-4xl">🔥</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-sm font-bold text-slate-800 flex items-center">
+          <span class="mr-1.5">🥗</span> 식단 구성 메뉴 및 칼로리
+        </h3>
+        <div id="resMenuList" class="divide-y divide-slate-100">
+          <!-- Item elements dynamically rendered -->
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <h3 class="text-sm font-bold text-slate-800 flex items-center">
+          <span class="mr-1.5">📊</span> 3대 영양소 및 주요 성분
+        </h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+            <span class="text-xs text-slate-400 font-medium">탄수화물</span>
+            <p id="resCarbs" class="text-lg font-bold text-slate-800 mt-0.5">0g</p>
+            <div class="w-full bg-slate-200 h-1 rounded-full mt-2 overflow-hidden">
+              <div id="barCarbs" class="bg-amber-500 h-full rounded-full" style="width: 50%"></div>
+            </div>
+          </div>
+          <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+            <span class="text-xs text-slate-400 font-medium">단백질</span>
+            <p id="resProtein" class="text-lg font-bold text-slate-800 mt-0.5">0g</p>
+            <div class="w-full bg-slate-200 h-1 rounded-full mt-2 overflow-hidden">
+              <div id="barProtein" class="bg-blue-500 h-full rounded-full" style="width: 65%"></div>
+            </div>
+          </div>
+          <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+            <span class="text-xs text-slate-400 font-medium">지방</span>
+            <p id="resFat" class="text-lg font-bold text-slate-800 mt-0.5">0g</p>
+            <div class="w-full bg-slate-200 h-1 rounded-full mt-2 overflow-hidden">
+              <div id="barFat" class="bg-rose-500 h-full rounded-full" style="width: 40%"></div>
+            </div>
+          </div>
+          <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+            <span class="text-xs text-slate-400 font-medium">나트륨</span>
+            <p id="resSodium" class="text-lg font-bold text-slate-800 mt-0.5">0mg</p>
+            <div class="w-full bg-slate-200 h-1 rounded-full mt-2 overflow-hidden">
+              <div id="barSodium" class="bg-purple-500 h-full rounded-full" style="width: 55%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-5 space-y-3">
+        <div class="flex items-center space-x-2 text-amber-900 font-bold text-sm">
+          <span>👩‍⚕️</span>
+          <span>임상 영양사의 AI 피드백</span>
+        </div>
+        <p id="resSummary" class="text-xs sm:text-sm font-semibold text-amber-950 leading-relaxed">
+          요약 한줄평
+        </p>
+        <ul id="resAdviceList" class="space-y-1.5 text-xs sm:text-sm text-amber-900/90 list-disc list-inside">
+          <!-- Advice items dynamically added -->
+        </ul>
+      </div>
+
+      <div class="flex justify-center pt-2">
+        <button onclick="saveMealToHistory()" id="saveBtn" class="bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs sm:text-sm py-2.5 px-6 rounded-xl transition shadow">
+          💾 오늘 식단 기록에 저장하기
+        </button>
+      </div>
+    </section>
+
+    <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-slate-800 flex items-center">
+          <span class="mr-1.5">📅</span> 오늘 기록된 급식 히스토리
+        </h3>
+        <button onclick="clearHistory()" class="text-xs text-slate-400 hover:text-rose-500 transition">
+          기록 전체 삭제
+        </button>
+      </div>
+
+      <div id="historyList" class="space-y-2">
+        <div class="text-center py-6 text-slate-400 text-xs">
+          아직 기록된 식단이 없습니다. 급식 사진을 분석해 보세요!
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Global State Variable
+    let currentBase64Image = null;
+    let currentMimeType = 'image/jpeg';
+    let lastAnalysisResult = null;
+
+    // Toast helper
+    function showToast(message, icon = 'ℹ️') {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastIcon').textContent = icon;
+      document.getElementById('toastMessage').textContent = message;
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 3500);
+    }
+
+    // Handle File Selection
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        showToast('이미지 파일만 선택 가능합니다.', '⚠️');
+        return;
+      }
+
+      currentMimeType = file.type;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        currentBase64Image = dataUrl.split(',')[1];
+        
+        document.getElementById('imagePreview').src = dataUrl;
+        document.getElementById('uploadPlaceholder').classList.add('hidden');
+        document.getElementById('previewContainer').classList.remove('hidden');
+        document.getElementById('analyzeBtn').disabled = false;
+        
+        // Hide previous results
+        document.getElementById('resultSection').classList.add('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Reset Image Selection
+    function resetImageSelection() {
+      currentBase64Image = null;
+      document.getElementById('imageInput').value = '';
+      document.getElementById('previewContainer').classList.add('hidden');
+      document.getElementById('uploadPlaceholder').classList.remove('hidden');
+      document.getElementById('analyzeBtn').disabled = true;
+      document.getElementById('resultSection').classList.add('hidden');
+    }
+
+    // Load Sample Image for Preview & Testing
+    function loadSampleImage() {
+      // SVG encoded canvas sample for demo lunch
+      const canvas = document.createElement('canvas');
+      canvas.width = 600;
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+
+      // Draw lunch tray background
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(0, 0, 600, 400);
+      
+      // Draw compartments
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath(); ctx.roundRect(30, 30, 250, 180, 15); ctx.fill(); // Rice
+      ctx.beginPath(); ctx.roundRect(320, 30, 250, 180, 15); ctx.fill(); // Soup
+      ctx.beginPath(); ctx.roundRect(30, 230, 160, 140, 15); ctx.fill(); // Main dish
+      ctx.beginPath(); ctx.roundRect(220, 230, 160, 140, 15); ctx.fill(); // Side 1
+      ctx.beginPath(); ctx.roundRect(410, 230, 160, 140, 15); ctx.fill(); // Side 2
+
+      // Draw food graphics
+      ctx.fillStyle = '#475569';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🍚 쌀밥', 155, 125);
+      ctx.fillText('🍲 소고기미역국', 445, 125);
+      ctx.fillText('🥩 제육볶음', 110, 310);
+      ctx.fillText('🥬 배추김치', 300, 310);
+      ctx.fillText('🥚 계란말이', 490, 310);
+
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      currentBase64Image = dataUrl.split(',')[1];
+      currentMimeType = 'image/jpeg';
+
+      document.getElementById('imagePreview').src = dataUrl;
+      document.getElementById('uploadPlaceholder').classList.add('hidden');
+      document.getElementById('previewContainer').classList.remove('hidden');
+      document.getElementById('analyzeBtn').disabled = false;
+      document.getElementById('resultSection').classList.add('hidden');
+
+      showToast('샘플 급식 사진이 로드되었습니다.', '📸');
+    }
+
+    async function analyzeLunchImage() {
+      if (!currentBase64Image) {
+        showToast('분석할 사진을 선택해 주세요.', '⚠️');
+        return;
+      }
+
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      const loadingState = document.getElementById('loadingState');
+      const resultSection = document.getElementById('resultSection');
+
+      analyzeBtn.disabled = true;
+      loadingState.classList.remove('hidden');
+      resultSection.classList.add('hidden');
+
+      try {
+        // Send request to Vercel Serverless API (/api/generate)
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            imageBase64: currentBase64Image,
+            mimeType: currentMimeType
+          })
+        });
+
+        const resData = await response.json();
+
+        if (!response.ok || !resData.success) {
+          throw new Error(resData.error || '식단 분석 요청 실패');
+        }
+
+        renderAnalysisResult(resData.data);
+        showToast('영양 성분 분석이 완료되었습니다!', '✅');
+
+      } catch (error) {
+        console.warn('Backend serverless call error (Falling back to mock preview if offline):', error);
+        
+        // Fallback demo data if backend environment variable is not configured yet during local preview
+        if (error.message.includes('GEMINI_API_KEY') || error.message.includes('404') || error.message.includes('Failed to fetch')) {
+          showToast('Vercel API 키 미설정 또는 오프라인 상태: 데모 분석 데이터를 표시합니다.', 'ℹ️');
+          const mockData = {
+            mealName: "제육볶음 & 미역국 급식 식단",
+            totalCalories: 720,
+            items: [
+              { name: "흰쌀밥", portion: "1공기 (200g)", calories: 300, category: "주식" },
+              { name: "소고기미역국", portion: "1대접 (250g)", calories: 110, category: "국/찌개" },
+              { name: "돈육제육볶음", portion: "1접시 (150g)", calories: 210, category: "메인반찬" },
+              { name: "계란말이", portion: "2조각 (60g)", calories: 70, category: "찬류" },
+              { name: "포기김치", portion: "40g", calories: 30, category: "찬류" }
+            ],
+            macros: { carbs: 95, protein: 32, fat: 22, sodium: 980 },
+            nutritionScore: 88,
+            summary: "단백질과 탄수화물이 균형 있게 구성된 우수한 급식 식단입니다.",
+            advice: [
+              "나트륨 섭취 조절을 위해 국물은 건더기 위주로 드시는 것을 권장합니다.",
+              "단백질 함량이 풍부하여 성장기 에너지 보충에 매우 적합합니다.",
+              "식후 신선한 과일이나 채소 스틱을 곁들이면 비타민 섭취를 보완할 수 있습니다."
+            ]
+          };
+          renderAnalysisResult(mockData);
+        } else {
+          showToast(`오류 발생: ${error.message}`, '❌');
+        }
+      } finally {
+        loadingState.classList.add('hidden');
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    function renderAnalysisResult(data) {
+      lastAnalysisResult = data;
+
+      document.getElementById('resMealName').textContent = data.mealName || '급식 식단 분석';
+      document.getElementById('resTimestamp').textContent = new Date().toLocaleString('ko-KR');
+      document.getElementById('resScoreBadge').textContent = data.nutritionScore || 85;
+      document.getElementById('resTotalCalories').textContent = data.totalCalories;
+
+      // Calorie diff text
+      const totalCal = data.totalCalories;
+      const diffElem = document.getElementById('resCalorieDiff');
+      if (totalCal < 600) {
+        diffElem.textContent = '가벼운 편';
+      } else if (totalCal <= 850) {
+        diffElem.textContent = '적정 수준';
+      } else {
+        diffElem.textContent = '높은 편';
+      }
+
+      // Render Menu Items List
+      const menuListElem = document.getElementById('resMenuList');
+      menuListElem.innerHTML = '';
+
+      (data.items || []).forEach(item => {
+        const itemRow = document.createElement('div');
+        itemRow.className = 'py-2.5 flex items-center justify-between text-xs sm:text-sm';
+        
+        let badgeColor = 'bg-slate-100 text-slate-600';
+        if (item.category === '주식') badgeColor = 'bg-amber-100 text-amber-800';
+        else if (item.category === '국/찌개') badgeColor = 'bg-blue-100 text-blue-800';
+        else if (item.category === '메인반찬') badgeColor = 'bg-rose-100 text-rose-800';
+
+        itemRow.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${badgeColor}">${item.category || '음식'}</span>
+            <span class="font-bold text-slate-800">${item.name}</span>
+            <span class="text-slate-400 text-xs">(${item.portion || '1인분'})</span>
+          </div>
+          <div class="font-extrabold text-slate-700">${item.calories} <span class="text-xs font-normal text-slate-400">kcal</span></div>
+        `;
+        menuListElem.appendChild(itemRow);
+      });
+
+      // Macros
+      document.getElementById('resCarbs').textContent = `${data.macros.carbs}g`;
+      document.getElementById('resProtein').textContent = `${data.macros.protein}g`;
+      document.getElementById('resFat').textContent = `${data.macros.fat}g`;
+      document.getElementById('resSodium').textContent = `${data.macros.sodium}mg`;
+
+      // Visual Progress Bar ratios (Approx limits)
+      document.getElementById('barCarbs').style.width = `${Math.min(100, (data.macros.carbs / 130) * 100)}%`;
+      document.getElementById('barProtein').style.width = `${Math.min(100, (data.macros.protein / 50) * 100)}%`;
+      document.getElementById('barFat').style.width = `${Math.min(100, (data.macros.fat / 30) * 100)}%`;
+      document.getElementById('barSodium').style.width = `${Math.min(100, (data.macros.sodium / 1500) * 100)}%`;
+
+      // Summary & Advice
+      document.getElementById('resSummary').textContent = `" ${data.summary} "`;
+      const adviceList = document.getElementById('resAdviceList');
+      adviceList.innerHTML = '';
+      (data.advice || []).forEach(tip => {
+        const li = document.createElement('li');
+        li.textContent = tip;
+        adviceList.appendChild(li);
+      });
+
+      document.getElementById('resultSection').classList.remove('hidden');
+      document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function saveMealToHistory() {
+      if (!lastAnalysisResult) return;
+
+      const historyKey = 'meal_history_today';
+      const existing = JSON.parse(localStorage.getItem(historyKey) || '[]');
+
+      const record = {
+        id: Date.now(),
+        time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+        mealName: lastAnalysisResult.mealName,
+        calories: lastAnalysisResult.totalCalories,
+        score: lastAnalysisResult.nutritionScore
+      };
+
+      existing.unshift(record);
+      localStorage.setItem(historyKey, JSON.stringify(existing));
+      renderHistoryList();
+      showToast('오늘의 식단 기록에 추가되었습니다.', '💾');
+    }
+
+    function renderHistoryList() {
+      const historyKey = 'meal_history_today';
+      const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      const container = document.getElementById('historyList');
+
+      if (history.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-6 text-slate-400 text-xs">
+            아직 기록된 식단이 없습니다. 급식 사진을 분석해 보세요!
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      let totalCalToday = 0;
+
+      history.forEach(item => {
+        totalCalToday += item.calories;
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between bg-slate-50 border border-slate-100 p-3 rounded-xl text-xs sm:text-sm';
+        div.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <span class="text-slate-400 text-xs">${item.time}</span>
+            <span class="font-bold text-slate-800">${item.mealName}</span>
+          </div>
+          <div class="flex items-center space-x-3">
+            <span class="font-black text-brand-600">${item.calories} kcal</span>
+            <button onclick="deleteHistoryItem(${item.id})" class="text-slate-300 hover:text-rose-500 font-bold text-xs">✕</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      // Total Today Summary Footer
+      const sumDiv = document.createElement('div');
+      sumDiv.className = 'mt-3 pt-3 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-700';
+      sumDiv.innerHTML = `
+        <span>오늘 누적 합계</span>
+        <span class="text-sm text-brand-700 font-black">${totalCalToday} kcal</span>
+      `;
+      container.appendChild(sumDiv);
+    }
+
+    function deleteHistoryItem(id) {
+      const historyKey = 'meal_history_today';
+      let history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      history = history.filter(item => item.id !== id);
+      localStorage.setItem(historyKey, JSON.stringify(history));
+      renderHistoryList();
+    }
+
+    function clearHistory() {
+      localStorage.removeItem('meal_history_today');
+      renderHistoryList();
+      showToast('히스토리가 삭제되었습니다.', '🗑️');
+    }
+
+    // Initialize history on page load
+    window.onload = function() {
+      renderHistoryList();
+    };
+  </script>
+</body>
+</html>
